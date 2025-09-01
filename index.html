@@ -31,27 +31,37 @@
   <div id="results"></div>
   
   <script>
-    const clientId = "718d7ebad52f464e8c99b1eb554b01d1"; // replace with your registered app client ID
+    const clientId = "718d7ebad52f464e8c99b1eb554b01d1"; 
     const redirectUri = "https://advikmrai.github.io/indagator/";
     let accessToken = null;
     
-    // Handle auth token
+    // Restore saved form values
     window.onload = function() {
+      document.getElementById("playlistUrl").value = localStorage.getItem("playlistUrl") || "";
+      document.getElementById("keyword").value = localStorage.getItem("keyword") || "";
+      
       const hash = window.location.hash.substring(1);
       const params = Qs.parse(hash);
       if (params.access_token) {
         accessToken = params.access_token;
         document.getElementById("loginBtn").style.display = "none";
+        // Clear the hash so it doesn’t stay in the URL
+        window.location.hash = "";
       }
     }
     
     document.getElementById("loginBtn").onclick = function() {
+      // Save form values before redirect
+      localStorage.setItem("playlistUrl", document.getElementById("playlistUrl").value);
+      localStorage.setItem("keyword", document.getElementById("keyword").value);
+      
       const scopes = "playlist-read-private playlist-read-collaborative";
       const authUrl = 
         "https://accounts.spotify.com/authorize" +
-        `?response_type=token&client_id=${clientId}` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        `?client_id=${clientId}` +
+        `&response_type=token` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&scope=${encodeURIComponent(scopes)}`;
       window.location = authUrl;
     }
     
@@ -83,7 +93,11 @@
         data.items.forEach((item, index) => {
           const track = item.track;
           if (track && track.name.toLowerCase().includes(keyword)) {
-            found.push({ index: offset + index + 1, name: track.name, artist: track.artists.map(a => a.name).join(", ") });
+            found.push({ 
+              index: offset + index + 1, 
+              name: track.name, 
+              artist: track.artists.map(a => a.name).join(", ") 
+            });
           }
         });
         
