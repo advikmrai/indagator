@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify Playlist Search</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.11.2/qs.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f9f9f9; }
+    h1 { font-size: 1.5rem; }
+    input, button { padding: 0.5rem; margin: 0.25rem 0; width: 100%; }
+    #results { margin-top: 1rem; padding: 1rem; background: #fff; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Spotify Playlist Search</h1>
+  
+  <p>1. Paste a playlist URL.<br>
+     2. Enter a keyword (like <code>sunset</code>).<br>
+     3. Click search to find matching songs + indexes.</p>
+  
+  <label>Spotify Playlist URL:</label>
+  <input type="text" id="playlistUrl" placeholder="https://open.spotify.com/playlist/...">
+  
+  <label>Keyword:</label>
+  <input type="text" id="keyword" placeholder="sunset">
+  
+  <button id="loginBtn">Login with Spotify</button>
+  <button id="searchBtn">Search Playlist</button>
+  
+  <div id="results"></div>
+  
+  <script>
+    const clientId = "YOUR_SPOTIFY_CLIENT_ID"; // replace with your registered app client ID
+    const redirectUri = window.location.origin + window.location.pathname;
+    let accessToken = null;
+    
+    // Handle auth token
+    window.onload = function() {
+      const hash = window.location.hash.substring(1);
+      const params = Qs.parse(hash);
+      if (params.access_token) {
+        accessToken = params.access_token;
+        document.getElementById("loginBtn").style.display = "none";
+      }
+    }
+    
+    document.getElementById("loginBtn").onclick = function() {
+      const scopes = "playlist-read-private playlist-read-collaborative";
+      const authUrl = 
+        "https://accounts.spotify.com/authorize" +
+        `?response_type=token&client_id=${clientId}` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      window.location = authUrl;
+    }
+    
+    document.getElementById("searchBtn").onclick = async function() {
+      if (!accessToken) {
+        alert("Please log in with Spotify first.");
+        return;
+      }
+      const url = document.getElementById("playlistUrl").value.trim();
+      const keyword = document.getElementById("keyword").value.trim().toLowerCase();
+      const playlistId = url.split("/playlist/")[1]?.split("?")[0];
+      
+      if (!playlistId) {
+        alert("Invalid playlist URL.");
+        return;
+      }
+      
+      let resultsHtml = "<h2>Results:</h2><ul>";
+      let offset = 0, found = [];
+      const limit = 100; // Spotify returns 100 tracks per request
+      
+      while (true) {
+        const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`, {
+          headers: { Authorization: "Bearer " + accessToken }
+        });
+        const data = await res.json();
+        if (!data.items) break;
+        
+        data.items.forEach((item, index) => {
+          const track = item.track;
+          if (track && track.name.toLowerCase().includes(keyword)) {
+            found.push({ index: offset + index + 1, name: track.name, artist: track.artists.map(a => a.name).join(", ") });
+          }
+        });
+        
+        if (data.items.length < limit) break;
+        offset += limit;
+      }
+      
+      if (found.length === 0) {
+        resultsHtml += "<li>No matches found.</li>";
+      } else {
+        found.forEach(f => {
+          resultsHtml += `<li>#${f.index}: ${f.name} — ${f.artist}</li>`;
+        });
+      }
+      resultsHtml += "</ul>";
+      document.getElementById("results").innerHTML = resultsHtml;
+    }
+  </script>
+</body>
+</html>
