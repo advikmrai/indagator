@@ -231,7 +231,7 @@
             const limit = 100; 
             
             while (true) {
-                const res = await fetch(`https://api.spotify.com/v1/playlists/$${playlistId}/tracks?limit=${limit}&offset=${offset}`, {
+                const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`, {
                     headers: { Authorization: "Bearer " + accessToken }
                 });
                 const data = await res.json();
