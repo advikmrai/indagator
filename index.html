@@ -1,234 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>indagator</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; background: #f9f9f9; }
-    h1 { font-size: 1.5rem; }
-    input, button { padding: 0.5rem; margin: 0.25rem 0; width: 100%; }
-    #results { margin-top: 1rem; padding: 1rem; background: #fff; border-radius: 8px; }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>indagator</title>
+    
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            background: #fff; 
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+            min-height: 100vh; 
+        }
+        /* sendy */
+        .container {
+            width: 90%; 
+            max-width: 600px; 
+            margin: 4rem 0; 
+            padding: 2rem; 
+            background-color: #fff; 
+            border-radius: 12px; 
+        }
 
-    /* Spinner styles */
-    .spinner {
-      display: flex;
-      align-items: center;
-      font-style: italic;
-      color: #444;
-    }
-    .spinner div {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #444;
-      border-radius: 50%;
-      width: 18px;
-      height: 18px;
-      margin-right: 8px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
+        h1 { 
+            font-size: 2rem; 
+            text-align: center; 
+            margin-bottom: 2rem; 
+        }
 
-    /* Clear button styles */
-    #clearBtn {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      font-size: 0.75rem;
-      padding: 0.25rem 0.5rem;
-      background: #eee;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #clearBtn:hover {
-      background: #ddd;
-    }
-  </style>
+        input, button { 
+            padding: 0.75rem; 
+            margin: 0.5rem 0; 
+            width: 100%; 
+            box-sizing: border-box; 
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px; 
+            margin-top: 1rem;
+        }
+
+        .button-group button {
+            flex-grow: 1; 
+            width: auto; 
+        }
+
+        #results { 
+            margin-top: 1.5rem; 
+            padding: 1rem; 
+            background: #fff; 
+            border-radius: 8px; 
+        }
+
+        .spinner {
+            display: flex;
+            align-items: center;
+            font-style: italic;
+            color: #444;
+        }
+        .spinner div {
+            border: 4px solid #fff;
+            border-top: 4px solid #444;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #clearBtn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            width: auto;
+            z-index: 10;
+        }
+        #clearBtn:hover {
+            background: #ddd;
+        }
+    </style>
 </head>
 <body>
-  <h1>indagator</h1>
-  
-  <p>1. Paste a playlist URL.<br>
-     2. Enter a keyword (like <code>sunset</code>).<br>
-     3. Click search to find matching songs + indexes.</p>
-  
-  <label>Spotify Playlist URL:</label>
-  <input type="text" id="playlistUrl" placeholder="https://open.spotify.com/playlist/...">
-  
-  <label>Keyword:</label>
-  <input type="text" id="keyword" placeholder="sunset">
-  
-  <button id="loginBtn">Login with Spotify</button>
-  <button id="searchBtn">Search Playlist</button>
-  
-  <div id="results"></div>
-
-  <!-- Clear Data Button -->
-  <button id="clearBtn">Clear Data</button>
-  
-  <script>
-    const clientId = "718d7ebad52f464e8c99b1eb554b01d1"; 
-    const redirectUri = "https://advikmrai.github.io/indagator/";
-    let accessToken = null;
-
-    // --- PKCE helpers ---
-    async function generateCodeVerifier(length) {
-      const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-      let result = "";
-      for (let i = 0; i < length; i++) {
-        result += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
-      return result;
-    }
-
-    async function generateCodeChallenge(codeVerifier) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(codeVerifier);
-      const digest = await window.crypto.subtle.digest("SHA-256", data);
-      return btoa(String.fromCharCode(...new Uint8Array(digest)))
-        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    }
-
-    function saveFormState() {
-      localStorage.setItem("playlistUrl", document.getElementById("playlistUrl").value);
-      localStorage.setItem("keyword", document.getElementById("keyword").value);
-    }
-
-    function restoreFormState() {
-      document.getElementById("playlistUrl").value = localStorage.getItem("playlistUrl") || "";
-      document.getElementById("keyword").value = localStorage.getItem("keyword") || "";
-    }
-
-    // --- Handle Spotify auth ---
-    async function handleAuth() {
-      const params = new URLSearchParams(window.location.search);
-
-      if (params.get("code")) {
-        // Exchange authorization code for access token
-        const code = params.get("code");
-        const codeVerifier = localStorage.getItem("code_verifier");
-
-        const body = new URLSearchParams({
-          client_id: clientId,
-          grant_type: "authorization_code",
-          code: code,
-          redirect_uri: redirectUri,
-          code_verifier: codeVerifier
-        });
-
-        const response = await fetch("https://accounts.spotify.com/api/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: body.toString()
-        });
-        const data = await response.json();
-        if (data.access_token) {
-          accessToken = data.access_token;
-          localStorage.setItem("access_token", accessToken);
-          document.getElementById("loginBtn").style.display = "none";
-          // Clean up the URL (remove ?code=...)
-          window.history.replaceState({}, document.title, redirectUri);
-        }
-      } else {
-        // See if we already have a token in storage
-        accessToken = localStorage.getItem("access_token");
-        if (accessToken) {
-          document.getElementById("loginBtn").style.display = "none";
-        }
-      }
-    }
-
-    document.getElementById("loginBtn").onclick = async function() {
-      saveFormState();
-
-      const codeVerifier = await generateCodeVerifier(128);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      localStorage.setItem("code_verifier", codeVerifier);
-
-      const scopes = "playlist-read-private playlist-read-collaborative";
-      const authUrl = 
-        "https://accounts.spotify.com/authorize" +
-        `?response_type=code` +
-        `&client_id=${clientId}` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&code_challenge_method=S256` +
-        `&code_challenge=${codeChallenge}`;
-      window.location = authUrl;
-    };
-
-    document.getElementById("searchBtn").onclick = async function() {
-      if (!accessToken) {
-        alert("Please log in with Spotify first.");
-        return;
-      }
-      const url = document.getElementById("playlistUrl").value.trim();
-      const keyword = document.getElementById("keyword").value.trim().toLowerCase();
-      const playlistId = url.split("/playlist/")[1]?.split("?")[0];
-      
-      if (!playlistId) {
-        alert("Invalid playlist URL.");
-        return;
-      }
-      
-      // Show spinner while searching
-      document.getElementById("results").innerHTML = `
-        <div class="spinner">
-          <div></div>
-          <span>Searching playlist, please wait...</span>
+    
+    <button id="clearBtn">Clear Data</button>
+    
+    <div class="container">
+        <h1>indagator</h1>
+        
+        <p>1. Paste a playlist URL.<br>
+            2. Enter a keyword (like <code>sunset</code>).<br>
+            3. Click search to find matching songs + indexes.</p>
+        
+        <label>Spotify Playlist URL:</label>
+        <input type="text" id="playlistUrl" placeholder="https://open.spotify.com/playlist/...">
+        
+        <label>Keyword:</label>
+        <input type="text" id="keyword" placeholder="sunset">
+        
+        <div class="button-group">
+            <button id="loginBtn">Login with Spotify</button>
+            <button id="searchBtn">Search Playlist</button>
         </div>
-      `;
-      
-      let resultsHtml = "<h2>Results:</h2><ul>";
-      let offset = 0, found = [];
-      const limit = 100; // Spotify returns 100 tracks per request
-      
-      while (true) {
-        const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`, {
-          headers: { Authorization: "Bearer " + accessToken }
-        });
-        const data = await res.json();
-        if (!data.items) break;
         
-        data.items.forEach((item, index) => {
-          const track = item.track;
-          if (track && track.name.toLowerCase().includes(keyword)) {
-            found.push({ 
-              index: offset + index + 1, 
-              name: track.name, 
-              artist: track.artists.map(a => a.name).join(", ") 
-            });
-          }
-        });
-        
-        if (data.items.length < limit) break;
-        offset += limit;
-      }
-      
-      if (found.length === 0) {
-        resultsHtml += "<li>No matches found.</li>";
-      } else {
-        found.forEach(f => {
-          resultsHtml += `<li>#${f.index}: ${f.name} — ${f.artist}</li>`;
-        });
-      }
-      resultsHtml += "</ul>";
-      document.getElementById("results").innerHTML = resultsHtml;
-    };
+        <div id="results"></div>
+    </div>
 
-    // Clear Data Button logic
-    document.getElementById("clearBtn").onclick = function() {
-      localStorage.clear();
-      alert("Stored data cleared.");
-      location.reload();
-    };
+    <script>
+        const clientId = "718d7ebad52f464e8c99b1eb554b01d1"; 
+        const redirectUri = "https://advikmrai.github.io/indagator/";
+        let accessToken = null;
 
-    // Init
-    restoreFormState();
-    handleAuth();
-  </script>
+        async function generateCodeVerifier(length) {
+            const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+            let result = "";
+            for (let i = 0; i < length; i++) {
+                result += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return result;
+        }
+
+        async function generateCodeChallenge(codeVerifier) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(codeVerifier);
+            const digest = await window.crypto.subtle.digest("SHA-256", data);
+            return btoa(String.fromCharCode(...new Uint8Array(digest)))
+                .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        }
+
+        function saveFormState() {
+            localStorage.setItem("playlistUrl", document.getElementById("playlistUrl").value);
+            localStorage.setItem("keyword", document.getElementById("keyword").value);
+        }
+
+        function restoreFormState() {
+            document.getElementById("playlistUrl").value = localStorage.getItem("playlistUrl") || "";
+            document.getElementById("keyword").value = localStorage.getItem("keyword") || "";
+        }
+
+        async function handleAuth() {
+            const params = new URLSearchParams(window.location.search);
+
+            if (params.get("code")) {
+                const code = params.get("code");
+                const codeVerifier = localStorage.getItem("code_verifier");
+
+                const body = new URLSearchParams({
+                    client_id: clientId,
+                    grant_type: "authorization_code",
+                    code: code,
+                    redirect_uri: redirectUri,
+                    code_verifier: codeVerifier
+                });
+
+                const response = await fetch("https://accounts.spotify.com/api/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: body.toString()
+                });
+                const data = await response.json();
+                if (data.access_token) {
+                    accessToken = data.access_token;
+                    localStorage.setItem("access_token", accessToken);
+                    document.getElementById("loginBtn").style.display = "none";
+                    window.history.replaceState({}, document.title, redirectUri);
+                }
+            } else {
+                accessToken = localStorage.getItem("access_token");
+                if (accessToken) {
+                    document.getElementById("loginBtn").style.display = "none";
+                }
+            }
+        }
+
+        document.getElementById("loginBtn").onclick = async function() {
+            saveFormState();
+
+            const codeVerifier = await generateCodeVerifier(128);
+            const codeChallenge = await generateCodeChallenge(codeVerifier);
+            localStorage.setItem("code_verifier", codeVerifier);
+
+            const scopes = "playlist-read-private playlist-read-collaborative";
+            const authUrl = 
+                "https://accounts.spotify.com/authorize" +
+                `?response_type=code` +
+                `&client_id=${clientId}` +
+                `&scope=${encodeURIComponent(scopes)}` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&code_challenge_method=S256` +
+                `&code_challenge=${codeChallenge}`;
+            window.location = authUrl;
+        };
+
+        document.getElementById("searchBtn").onclick = async function() {
+            if (!accessToken) {
+                alert("Please log in with Spotify first.");
+                return;
+            }
+            const url = document.getElementById("playlistUrl").value.trim();
+            const keyword = document.getElementById("keyword").value.trim().toLowerCase();
+            const playlistId = url.split("/playlist/")[1]?.split("?")[0];
+            
+            if (!playlistId) {
+                alert("Invalid playlist URL.");
+                return;
+            }
+            
+            document.getElementById("results").innerHTML = `
+                <div class="spinner">
+                    <div></div>
+                    <span>Searching playlist, please wait...</span>
+                </div>
+            `;
+            
+            let resultsHtml = "<h2>Results:</h2><ul>";
+            let offset = 0, found = [];
+            const limit = 100; 
+            
+            while (true) {
+                const res = await fetch(`https://api.spotify.com/v1/playlists/$${playlistId}/tracks?limit=${limit}&offset=${offset}`, {
+                    headers: { Authorization: "Bearer " + accessToken }
+                });
+                const data = await res.json();
+                if (!data.items) break;
+                
+                data.items.forEach((item, index) => {
+                    const track = item.track;
+                    if (track && track.name.toLowerCase().includes(keyword)) {
+                        found.push({ 
+                            index: offset + index + 1, 
+                            name: track.name, 
+                            artist: track.artists.map(a => a.name).join(", ") 
+                        });
+                    }
+                });
+                
+                if (data.items.length < limit) break;
+                offset += limit;
+            }
+            
+            if (found.length === 0) {
+                resultsHtml += "<li>No matches found.</li>";
+            } else {
+                found.forEach(f => {
+                    resultsHtml += `<li>#${f.index}: ${f.name} — ${f.artist}</li>`;
+                });
+            }
+            resultsHtml += "</ul>";
+            document.getElementById("results").innerHTML = resultsHtml;
+        };
+
+        document.getElementById("clearBtn").onclick = function() {
+            localStorage.clear();
+            alert("Stored data cleared.");
+            location.reload();
+        };
+
+        restoreFormState();
+        handleAuth();
+    </script>
 </body>
 </html>
